@@ -24,6 +24,7 @@ const path = require('path');
 const { v4: uuidv4 } = require('uuid');
 
 const app = express();
+app.set('trust proxy', 1); // required behind Bonto/SnapDeploy's proxy, otherwise express-rate-limit crashes on the X-Forwarded-For header
 app.use(cors());
 app.use(express.json({ limit: '5mb' })); // proof screenshots are base64 in JSON
 
