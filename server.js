@@ -864,6 +864,40 @@ app.post('/api/institutions', async (req, res) => {
  * The admin clicks these links directly from the email — no dashboard login
  * needed. Approving auto-generates the three staff access codes.
  */
+// Small limiter just for login attempts — protects the (short) access codes
+// from brute-forcing without blocking normal typing/retries.
+const loginLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts — please wait a moment and try again.' }
+});
+
+/**
+ * POST /api/login
+ * body: { code }
+ * Checks a staff access code against every approved institution's generated
+ * codes (set at approval time — see /approve below) and returns which role
+ * and institution it belongs to, so a real (non-demo) code can actually log
+ * a staff member in. Demo codes (PRIN2026/VP2026/DISC2026) are handled
+ * entirely on the frontend and never reach this endpoint.
+ */
+app.post('/api/login', loginLimiter, (req, res) => {
+  const { code } = req.body;
+  if (!code) return res.status(400).json({ valid: false, error: 'code is required.' });
+
+  for (const inst of Object.values(institutions)) {
+    if (inst.status !== 'approved' || !inst.codes) continue;
+    for (const [role, instCode] of Object.entries(inst.codes)) {
+      if (instCode === code) {
+        return res.json({ valid: true, role, institutionName: inst.name });
+      }
+    }
+  }
+  res.status(404).json({ valid: false, error: 'Access code not recognized.' });
+});
+
 app.get('/api/institutions/:id/approve', (req, res) => {
   const inst = institutions[req.params.id];
   if (!inst) return res.status(404).send('<h2>Request not found.</h2>');
